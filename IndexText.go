@@ -5,80 +5,97 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode"
 )
 
-// Індексуємо текст по словам
-func indexText(text []string) map[string]map[int]struct{} {
-	index := make(map[string]map[int]struct{})
-	for i, line := range text {
+// Зчитуємо текст з файлу
+func readFile(filename string) []string {
+	file, err := os.Open(filename)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var lines []string
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		panic(err)
+	}
+	return lines
+}
+
+// Функція для нормалізації слова: видаляє пунктуацію і переводить в нижній регістр
+func normalizeWord(word string) string {
+	var b strings.Builder
+	for _, r := range word {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) {
+			b.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return b.String()
+}
+
+// Індексуємо текст по словам (case insensitive)
+func indexText(lines []string) map[string][]int {
+	index := make(map[string][]int)
+	for i, line := range lines {
 		words := strings.Fields(line)
 		for _, word := range words {
-			word = strings.ToLower(word)
-			if _, exists := index[word]; !exists {
-				index[word] = make(map[int]struct{})
-			}
-			index[word][i] = struct{}{}
+			normalizedWord := normalizeWord(word)
+			index[normalizedWord] = append(index[normalizedWord], i)
 		}
 	}
 	return index
 }
 
-// Знаходимо всі рядки за словом
-func searchByWord(index map[string]map[int]struct{}, text []string, word string) []string {
-	word = strings.ToLower(word)
-	lines := []string{}
-	if lineIndices, found := index[word]; found {
-		for lineIndex := range lineIndices {
-			lines = append(lines, text[lineIndex])
+// Знаходимо всі рядки за словом (case insensitive)
+func searchByWord(lines []string, index map[string][]int, query string) []string {
+	normalizedQuery := normalizeWord(query)
+	var results []string
+	if indices, found := index[normalizedQuery]; found {
+		for _, idx := range indices {
+			results = append(results, lines[idx])
 		}
 	}
-	return lines
+	return results
 }
 
-// Зчитуємо текст з файлу
-func readTextFromFile(filename string) ([]string, error) {
-	file, err := os.Open(filename)
+// Пошук тексту
+func searchText(lines []string, index map[string][]int) {
+	fmt.Print("Введіть слово для пошуку: ")
+	reader := bufio.NewReader(os.Stdin)
+	query, err := reader.ReadString('\n')
 	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var text []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		text = append(text, scanner.Text())
+		panic(err)
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
+	query = strings.TrimSpace(query) // Видаляємо символ нового рядка і пробіли
 
-	return text, nil
+	results := searchByWord(lines, index, query)
+	if len(results) == 0 {
+		fmt.Println("Рядок не знайдено.")
+		return
+	}
+	fmt.Println("Знайдені рядки:")
+	for _, line := range results {
+		fmt.Println(line)
+	}
 }
 
 func main() {
-	// Зчитуємо текст з файлу
 	filename := "text.txt"
-	text, err := readTextFromFile(filename)
-	if err != nil {
-		fmt.Println("Помилка читання файлу:", err)
-		return
-	}
+	lines := readFile(filename)
 
 	// Індексуємо текст
-	index := indexText(text)
-
-	// Отримання пошукового запиту від користувача
-	var query string
-	fmt.Print("Введіть слово для пошуку: ")
-	fmt.Scanln(&query)
-
-	// Пошук рядків, які містять пошукове слово
-	results := searchByWord(index, text, query)
-
-	// Виведення результатів пошуку
-	fmt.Println("Результати пошуку:")
-	for _, result := range results {
-		fmt.Println(result)
+	index := indexText(lines)
+	fmt.Println("Проіндексовані слова (для тестування):")
+	for word, indices := range index {
+		fmt.Printf("%s: %v\n", word, indices)
 	}
+
+	// Пошук тексту
+	searchText(lines, index)
 }
