@@ -8,7 +8,42 @@ import (
 	"unicode"
 )
 
-// Зчитуємо текст з файлу
+// TextIndex представляє індекс тексту
+type TextIndex struct {
+	index map[string][]int
+}
+
+// NewTextIndex створює новий TextIndex
+func NewTextIndex() *TextIndex {
+	return &TextIndex{
+		index: make(map[string][]int),
+	}
+}
+
+// Індексує текст по словам (case insensitive)
+func (ti *TextIndex) IndexText(lines []string) {
+	for i, line := range lines {
+		words := strings.Fields(line)
+		for _, word := range words {
+			normalizedWord := normalizeWord(word)
+			ti.index[normalizedWord] = append(ti.index[normalizedWord], i)
+		}
+	}
+}
+
+// Знаходить всі рядки за словом (case insensitive)
+func (ti *TextIndex) SearchByWord(lines []string, query string) []string {
+	normalizedQuery := normalizeWord(query)
+	var results []string
+	if indices, found := ti.index[normalizedQuery]; found {
+		for _, idx := range indices {
+			results = append(results, lines[idx])
+		}
+	}
+	return results
+}
+
+// Зчитує текст з файлу
 func readFile(filename string) []string {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -38,33 +73,8 @@ func normalizeWord(word string) string {
 	return b.String()
 }
 
-// Індексуємо текст по словам (case insensitive)
-func indexText(lines []string) map[string][]int {
-	index := make(map[string][]int)
-	for i, line := range lines {
-		words := strings.Fields(line)
-		for _, word := range words {
-			normalizedWord := normalizeWord(word)
-			index[normalizedWord] = append(index[normalizedWord], i)
-		}
-	}
-	return index
-}
-
-// Знаходимо всі рядки за словом (case insensitive)
-func searchByWord(lines []string, index map[string][]int, query string) []string {
-	normalizedQuery := normalizeWord(query)
-	var results []string
-	if indices, found := index[normalizedQuery]; found {
-		for _, idx := range indices {
-			results = append(results, lines[idx])
-		}
-	}
-	return results
-}
-
 // Пошук тексту
-func searchText(lines []string, index map[string][]int) {
+func searchText(lines []string, ti *TextIndex) {
 	fmt.Print("Введіть слово для пошуку: ")
 	reader := bufio.NewReader(os.Stdin)
 	query, err := reader.ReadString('\n')
@@ -74,7 +84,7 @@ func searchText(lines []string, index map[string][]int) {
 
 	query = strings.TrimSpace(query) // Видаляємо символ нового рядка і пробіли
 
-	results := searchByWord(lines, index, query)
+	results := ti.SearchByWord(lines, query)
 	if len(results) == 0 {
 		fmt.Println("Рядок не знайдено.")
 		return
@@ -89,13 +99,14 @@ func main() {
 	filename := "text.txt"
 	lines := readFile(filename)
 
-	// Індексуємо текст
-	index := indexText(lines)
+	// Створюємо та індексуємо текст
+	ti := NewTextIndex()
+	ti.IndexText(lines)
 	fmt.Println("Проіндексовані слова (для тестування):")
-	for word, indices := range index {
+	for word, indices := range ti.index {
 		fmt.Printf("%s: %v\n", word, indices)
 	}
 
 	// Пошук тексту
-	searchText(lines, index)
+	searchText(lines, ti)
 }
